@@ -1,0 +1,32 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+Job Related To Field
+```{r, EDA from Major Related, echo = FALSE}
+g <- ggplot(ed_data, aes(JOBSATIS, fill= OCEDRLP)) + geom_bar()
+g
+plyr::count(ed_data, "OCEDRLP")
+table(ed_data$JOBSATIS, ed_data$OCEDRLP)
+
+```
+
+Primary Job Work
+```{r, Analysis NOCPRNG}
+table(ed_data$NOCPRMG_non, ed_data$JOBSATIS)
+
+prop.table(table(ed_data$NOCPRMG, ed_data$JOBSATIS), 2) #Divides by Column
+prop.table(table(ed_data$NOCPRMG, ed_data$JOBSATIS),1) #Divides by Row
+prop.table(table(ed_data$NOCPRMG, ed_data$JOBSATIS)) #Overall
+ed_data %>% 
+  count(NOCPRMG_non ,JOBSATIS) %>%  
+  ggplot(mapping = aes(x = NOCPRMG, y = as.factor(JOBSATIS))) +
+    geom_tile(mapping = aes(fill = n))
+
+
+prop.table(table(ed_data$NOCPRMG, ed_data$JOBSATIS)) #Divides by Column
+mosaicplot(prop.table(table(ed_data$NOCPRMG, ed_data$JOBSATIS)), color=TRUE,main="Overall NOCPRMG vs Satisfaction Proportions")
+
+
+```

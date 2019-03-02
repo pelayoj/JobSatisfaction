@@ -1,0 +1,334 @@
+---
+title: "EDA"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r, echo=FALSE, include = FALSE}
+library(tidyverse)
+library(mosaic)
+library(readr)
+library(ipumsr)
+library(labelled)
+library(dplyr)
+library(ggplot2)
+
+highered_00006 <- read_csv("/home/pelayo1/Stat_316_Project/highered_00006.csv")
+#View(highered_00006)
+```
+
+```{r, data cleaning, echo = FALSE}
+usa_ddi <- read_ipums_ddi("/home/pelayo1/Stat_316_Project/highered_00006.xml")
+ed_data <- read_ipums_micro(usa_ddi, verbose = FALSE)
+
+ed_data <- ed_data %>% 
+  filter(LFSTAT==1, JOBSATIS != 98) %>%
+  mutate(GENDER = droplevels(as_factor(GENDER)), 
+         RACETH= droplevels(as_factor(RACETH)), 
+         DGRDG= droplevels(as_factor(DGRDG)), 
+         LFSTAT= droplevels(as_factor(LFSTAT)), 
+         HRSWKGR = droplevels(as_factor(HRSWKGR)), 
+         JOBINS = droplevels(as_factor(JOBINS)),
+         JOBPENS=droplevels.factor(JOBPENS),
+         JOBPROFT=droplevels(as_factor(JOBPROFT),
+        JOBVAC = droplevels(as_factor(JOBVAC)),
+        OCEDRLP = droplevels(as_factor(OCEDRLP)), 
+        NOCPRMG = droplevels(as_factor(NOCPRMG)),
+        WAPRSM= droplevels(as_factor(WAPRSM)),
+        SALARY = droplevels(as_factor(SALARY)), 
+        JOBSATIS = droplevels(as_factor(JOBSATIS))))
+ed_data <- ed_data %>% mutate(OCEDRLP = ifelse(OCEDRLP == 1,"Closely Related",
+                                    ifelse(OCEDRLP == 2, "Somewhat Related",
+                                    ifelse(OCEDRLP == 3, "Not Related",
+                                    ifelse(OCEDRLP == 98, "Logical Skip", NA)))))
+ed_data <- ed_data %>% mutate(NOCPRMG = ifelse(NOCPRMG == 1,"Computer and mathematical scientists ",
+                                    ifelse(NOCPRMG == 2, "Biological, agricultural and other life scientists",
+                                    ifelse(NOCPRMG == 3, "Physical and related scientists",
+                                    ifelse(NOCPRMG == 4, "Social and related scientists",
+                                    ifelse(NOCPRMG == 5, "Engineers",
+                                    ifelse(NOCPRMG == 6, "Science and engineering related occupations ",
+                                    ifelse(NOCPRMG == 7, "Non-science and engineering occupations ",
+                                    ifelse(NOCPRMG == 98, "Logical Skip", NA)))))))))
+
+ed_data <- ed_data %>% mutate(NOCPRMG_non = ifelse(NOCPRMG =="Computer and mathematical scientists ", "MSCS",
+                                    ifelse(NOCPRMG == "Biological, agricultural and other life scientists", "Bio",
+                                    ifelse(NOCPRMG == "Physical and related scientists", "Physics",
+                                    ifelse(NOCPRMG =="Social and related scientists", "Social",
+                                    ifelse(NOCPRMG =="Engineers", "Engineers",
+                                    ifelse(NOCPRMG =="Science and engineering related occupations ", "S-Engineer-related", "NS-Engineer-related")))))))
+
+
+```
+
+Job satisfaction
+```{r, EDA from AGE}
+ed_data %>%
+  count(JOBSATIS)
+ggplot(data = ed_data) + 
+  geom_bar(mapping = aes(x = JOBSATIS))
+```
+
+#####
+Demographics
+#####
+
+
+Age 
+```{r}
+favstats(~AGE, data=ed_data)
+ggplot(data=ed_data) + 
+  geom_histogram(mapping = aes(x=AGE))
+favstats(AGE~JOBSATIS, data=ed_data)
+ggplot(data = ed_data) + 
+  geom_boxplot(mapping = aes(x = as.factor(JOBSATIS), y=AGE))
+```
+
+Gender
+```{r}
+#Gender
+prop.table(table(ed_data$GENDER))
+prop.table(table(ed_data$GENDER, ed_data$JOBSATIS),1)
+prop.table(table(ed_data$GENDER, ed_data$JOBSATIS),2)
+
+gender.prop <- prop.table(table(ed_data$JOBSATIS, ed_data$GENDER))
+mosaicplot(gender.prop, color=TRUE,main="Job satisfaction by gender")
+```
+
+Race
+```{r}
+prop.table(table(ed_data$RACETH))
+prop.table(table(ed_data$RACETH, ed_data$JOBSATIS),1)
+prop.table(table(ed_data$RACETH, ed_data$JOBSATIS),2)
+race.prop <- prop.table(table(ed_data$JOBSATIS, ed_data$RACETH))
+mosaicplot(race.prop, color=TRUE,main="Job satisfaction by race")
+```
+
+
+#####
+Education
+#####
+
+
+Highest degree
+```{r}
+prop.table(table(ed_data$DGRDG))
+prop.table(table(ed_data$DGRDG, ed_data$JOBSATIS),1)
+prop.table(table(ed_data$DGRDG, ed_data$JOBSATIS),2)
+degree.prop <- prop.table(table(ed_data$JOBSATIS, ed_data$DGRDG))
+mosaicplot(degree.prop, color=TRUE,main="Job satisfaction by highest degree")
+```
+
+
+Satisfaction verses Primary Work Activity
+```{r}
+ed_data <- ed_data %>% mutate(WAPRSM_non = ifelse(WAPRSM ==1, "Research",
+                                    ifelse(WAPRSM == 2, "Teaching",
+                                    ifelse(WAPRSM == 3,"Management", 
+                                    ifelse(WAPRSM ==4, "Computers", "Other")))))
+
+
+waprsm <- prop.table(table(ed_data$JOBSATIS, ed_data$WAPRSM_non),1)
+waprsm
+mosaicplot(waprsm, color=TRUE,main="Satisfaction vs Primary Work Activity")
+```
+
+
+Job Related To Major 
+```{r, EDA from Major Related}
+g <- ggplot(ed_data, aes(JOBSATIS, fill= OCEDRLP)) + geom_bar()
+g
+plyr::count(ed_data, "OCEDRLP")
+table(ed_data$JOBSATIS, ed_data$OCEDRLP)
+
+```
+
+Primary Job Work
+```{r, Analysis NOCPRNG}
+table(ed_data$NOCPRMG_non, ed_data$JOBSATIS)
+
+prop.table(table(ed_data$NOCPRMG, ed_data$JOBSATIS), 2) #Divides by Column
+prop.table(table(ed_data$NOCPRMG, ed_data$JOBSATIS),1) #Divides by Row
+prop.table(table(ed_data$NOCPRMG, ed_data$JOBSATIS)) #Overall
+
+
+prop.table(table(ed_data$NOCPRMG, ed_data$JOBSATIS)) #Divides by Column
+mosaicplot(prop.table(table(ed_data$NOCPRMG, ed_data$JOBSATIS)), color=TRUE,main="Overall NOCPRMG vs Satisfaction Proportions")
+
+
+```
+
+Interaction Between Relationship to Major and Primary Job Work
+```{r}
+ed_data <- ed_data %>% mutate(OCEDRLP_non = ifelse(OCEDRLP =="Closely Related", "Close",
+                                    ifelse(OCEDRLP == "Somewhat Related", "Somewhat", "Not")))
+
+prop.table(table(ed_data$NOCPRMG_non, ed_data$OCEDRLP_non),2) #Divides by Column
+prop.table(table(ed_data$NOCPRMG_non, ed_data$OCEDRLP_non),1)
+
+mosaicplot(prop.table(table(ed_data$NOCPRMG_non, ed_data$OCEDRLP_non)), color=TRUE,main="Overall NOCPRMG vs OCEDRLP Proportions")
+
+```
+
+
+####
+Work Related
+####
+
+
+Hours/week worked
+```{r}
+prop.table(table(ed_data$HRSWKGR))
+prop.table(table(ed_data$HRSWKGR, ed_data$JOBSATIS),1)
+prop.table(table(ed_data$HRSWKGR, ed_data$JOBSATIS),2)
+hour.prop <- prop.table(table(ed_data$JOBSATIS, ed_data$HRSWKGR))
+mosaicplot(hour.prop, color=TRUE,main="Job satisfaction by hours per week worked")
+```
+
+Satisfaction verses Primary Work Activity
+```{r}
+ed_data <- ed_data %>% mutate(WAPRSM_non = ifelse(WAPRSM ==1, "Research",
+                                    ifelse(WAPRSM == 2, "Teaching",
+                                    ifelse(WAPRSM == 3,"Management", 
+                                    ifelse(WAPRSM ==4, "Computers", "Other")))))
+
+
+waprsm <- prop.table(table(ed_data$JOBSATIS, ed_data$WAPRSM_non),1)
+waprsm
+mosaicplot(waprsm, color=TRUE,main="Satisfaction vs Primary Work Activity")
+```
+
+
+Interaction of Available Benefits Compared to Insurnace
+```{r}
+library(gridExtra) 
+
+ed_data <- ed_data %>% mutate(JOBPENS = ifelse(JOBPENS ==1, "Yes", "No"))
+ed_data <- ed_data %>% mutate(JOBVAC = ifelse(JOBVAC ==1, "Yes", "No"))
+
+pens.prop <- prop.table(table(ed_data$JOBINS, ed_data$JOBPENS))
+vac.prop <- prop.table(table(ed_data$JOBINS, ed_data$JOBVAC))
+proft.prop <- prop.table(table(ed_data$JOBINS, ed_data$JOBPROFT))
+```
+
+
+
+Interaction of Available Benefits Compared to Insurnace
+```{r}
+library(gridExtra) 
+
+ed_data <- ed_data %>% mutate(JOBPENS = ifelse(JOBPENS ==1, "Yes", "No"))
+ed_data <- ed_data %>% mutate(JOBVAC = ifelse(JOBVAC ==1, "Yes", "No"))
+
+pens.prop <- prop.table(table(ed_data$JOBINS, ed_data$JOBPENS))
+vac.prop <- prop.table(table(ed_data$JOBINS, ed_data$JOBVAC))
+proft.prop <- prop.table(table(ed_data$JOBINS, ed_data$JOBPROFT))
+```
+
+
+Proportion of Insurance vs Pension Plan
+```{r}
+pens.prop
+```
+
+Proportion of Insurance vs Paid Vacation/Sick/Leave Days
+
+```{r}
+vac.prop
+```
+
+Proportion of Insurance vs Profit Plan
+
+```{r}
+proft.prop
+```
+
+Mosaic Plots
+```{r}
+m1<- mosaicplot(pens.prop, color=TRUE,main="Insurance vs Pension Plan")
+m2 <- mosaicplot(vac.prop, color=TRUE,main="Insurance vs Paid Vacation/Sick/Leave")
+m3 <- mosaicplot(proft.prop, color=TRUE,main="Insurance vs Profit Plan")
+```
+
+
+
+
+```{r, echo=FALSE}
+pens1.prop <- prop.table(table(ed_data$JOBSATIS, ed_data$JOBPENS))
+vac1.prop <- prop.table(table(ed_data$JOBSATIS, ed_data$JOBVAC))
+proft1.prop <- prop.table(table(ed_data$JOBSATIS, ed_data$JOBPROFT))
+ins1.prop <- prop.table(table(ed_data$JOBSATIS, ed_data$JOBINS))
+```
+
+
+Proportion of Job Satisfaction vs Pension Plan
+
+```{r}
+pens1.prop
+```
+
+Proportion of Job Satisfaction vs Vacation/Sick/Leave Days
+```{r}
+vac1.prop
+```
+
+Proportion of Job Satisfaction vs Profit Plan
+
+```{r}
+proft1.prop
+```
+
+
+Proportion of Job Satisfaction vs Insurance Plan
+
+```{r}
+ins1.prop
+```
+
+Satisfaction verses Available Benefits Mosaic Plots
+```{r}
+mosaicplot(pens.prop, color=TRUE,main="Satisfaction vs Pension Plan")
+mosaicplot(vac.prop, color=TRUE,main="Satisfaction vs Paid Vacation/Sick/Leave")
+mosaicplot(proft.prop, color=TRUE,main="Satisfaction vs Profit Sharing Plan")
+mosaicplot(proft.prop, color=TRUE,main="Satisfaction vs Insurance Plan")
+```
+
+
+
+
+Proportion of Insurance vs Pension Plan
+```{r}
+pens.prop
+```
+
+Proportion of Insurance vs Paid Vacation/Sick/Leave Days
+```{r}
+vac.prop
+```
+
+Proportion of Insurance vs Profit Plan
+```{r}
+proft.prop
+```
+
+
+Salary
+```{r}
+library(plyr)
+ed_data <- ed_data %>% mutate(JOBSATIS_cat = ifelse(JOBSATIS ==1, "Very Satisfied",
+                                            ifelse(JOBSATIS ==2, "Somewhat Satisfied",
+                                            ifelse(JOBSATIS ==3, "Somewhat Disatisfied","Very Disatisfied"))))
+
+
+s_meds <- ddply(ed_data, .(JOBSATIS), summarise, med = median(SALARY))
+
+ggplot(ed_data, aes(x=as.factor(JOBSATIS), y=SALARY)) + geom_boxplot() + xlab("Job Satisfaction") + ylab("Salary") +  geom_text(data = s_meds, aes(x = JOBSATIS, y = med, label = med), size = 3, vjust = -1.5) + ggtitle("Job Satisfaction vs Salary")
+
+```
+
+
+
+
+
+
+

@@ -1,0 +1,246 @@
+---
+title: "EDA"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r, echo=FALSE, include = FALSE}
+library(tidyverse)
+library(mosaic)
+library(readr)
+library(ipumsr)
+library(labelled)
+library(dplyr)
+library(ggplot2)
+
+highered_00006 <- read_csv("/home/pelayo1/Stat_316_Project/highered_00006.csv")
+View(highered_00006)
+```
+
+```{r, data cleaning}
+usa_ddi <- read_ipums_ddi("/home/pelayo1/Stat_316_Project/highered_00006.xml")
+ed_data <- read_ipums_micro(usa_ddi, verbose = FALSE)
+
+ed_data <- ed_data %>% 
+  filter(LFSTAT==1, JOBSATIS != 98) %>%
+  mutate(GENDER = droplevels(as_factor(GENDER)), 
+         RACETH= droplevels(as_factor(RACETH)), 
+         DGRDG= droplevels(as_factor(DGRDG)), 
+         LFSTAT= droplevels(as_factor(LFSTAT)), 
+         HRSWKGR = droplevels(as_factor(HRSWKGR)), 
+         JOBINS = droplevels(as_factor(JOBINS)),
+         JOBPENS=droplevels.factor(JOBPENS),
+         JOBPROFT=droplevels(as_factor(JOBPROFT),
+        JOBVAC = droplevels(as_factor(JOBVAC)),
+        OCEDRLP = droplevels(as_factor(OCEDRLP)), 
+        NOCPRMG = droplevels(as_factor(NOCPRMG)),
+        WAPRSM= droplevels(as_factor(WAPRSM)),
+        SALARY = droplevels(as_factor(SALARY)), 
+        JOBSATIS = droplevels(as_factor(JOBSATIS))))
+ed_data <- ed_data %>% mutate(OCEDRLP = ifelse(OCEDRLP == 1,"Closely Related",
+                                    ifelse(OCEDRLP == 2, "Somewhat Related",
+                                    ifelse(OCEDRLP == 3, "Not Related",
+                                    ifelse(OCEDRLP == 98, "Logical Skip", NA)))))
+ed_data <- ed_data %>% mutate(NOCPRMG = ifelse(NOCPRMG == 1,"Computer and mathematical scientists ",
+                                    ifelse(NOCPRMG == 2, "Biological, agricultural and other life scientists",
+                                    ifelse(NOCPRMG == 3, "Physical and related scientists",
+                                    ifelse(NOCPRMG == 4, "Social and related scientists",
+                                    ifelse(NOCPRMG == 5, "Engineers",
+                                    ifelse(NOCPRMG == 6, "Science and engineering related occupations ",
+                                    ifelse(NOCPRMG == 7, "Non-science and engineering occupations ",
+                                    ifelse(NOCPRMG == 98, "Logical Skip", NA)))))))))
+head(ed_data)
+```
+
+
+```{r, EDA from Major Related}
+#ggplot(ed_data, aes(GENDER, AGE)) + geom_boxplot() + ylab("Age") + xlab("Gender")
+
+g <- ggplot(ed_data, aes(JOBSATIS, fill= OCEDRLP)) + geom_bar()
+g
+plyr::count(ed_data, "OCEDRLP")
+table(ed_data$JOBSATIS, ed_data$OCEDRLP)
+
+(30103+26764)/(30103+26764+3944+791) #Percent of people who are satisfied out of people who's jobs are closely related to their major
+
+(384+5597)/(384+5597+1744+837) #Percent of people who are satisfied out of people who's jobs are not related to their major
+
+(9170+12147)/(9170+12147+2490+590) #Percent of people who are satisfied out of people who's jobs are somewhat related to their major
+
+table(ed_data$JOBSATIS, ed_data$OCEDRLP)
+
+```
+
+92% of people who have a job closely related to their major are very/somewhat satisfied. 
+
+87.3% of people who have a job somewhat related to their major are very/somewhat satisfied. 
+
+70% of people who have a job not related to their major are very/somewhat satisfied. 
+
+
+```{r, Analysis NOCPRNG}
+ed_data <- ed_data %>% mutate(NOCPRMG_non = ifelse(NOCPRMG =="Computer and mathematical scientists ", "MSCS",
+                                    ifelse(NOCPRMG == "Biological, agricultural and other life scientists", "Bio",
+                                    ifelse(NOCPRMG == "Physical and related scientists", "Physics",
+                                    ifelse(NOCPRMG =="Social and related scientists", "Social",
+                                    ifelse(NOCPRMG =="Engineers", "Engineers",
+                                    ifelse(NOCPRMG =="Science and engineering related occupations ", "S-Engineer-related", "NS-Engineer-related")))))))
+
+
+table(ed_data$NOCPRMG_non, ed_data$JOBSATIS)
+
+prop.table(table(ed_data$NOCPRMG, ed_data$JOBSATIS),2) #Divides by Column
+prop.table(table(ed_data$NOCPRMG, ed_data$JOBSATIS),1) #Divides by Row
+
+ed_data %>% 
+  count(NOCPRMG_non ,JOBSATIS) %>%  
+  ggplot(mapping = aes(x = NOCPRMG, y = as.factor(JOBSATIS))) +
+    geom_tile(mapping = aes(fill = n))
+
+```
+
+Out of all the people who are very satisfied, 30% of them are in Non-science and engineering occupations, and 21% are in Science and engineering related occupations. Out of all the people who are disatisfied, 49% of them are in non-science and engineering occupations. 
+
+Out of the people in non-science and engineering occupations, 86% of them are very/somewhat satisfied. Out of the people in science and engineering related occupations, 91% of them are very/somewhat satisfied. 
+
+```{r}
+ed_data <- ed_data %>% mutate(OCEDRLP_non = ifelse(OCEDRLP =="Closely Related", "Close",
+                                    ifelse(OCEDRLP == "Somewhat Related", "Somewhat", "Not")))
+
+prop.table(table(ed_data$NOCPRMG_non, ed_data$OCEDRLP_non),2) #Divides by Column
+prop.table(table(ed_data$NOCPRMG_non, ed_data$OCEDRLP_non),1)
+
+mosaicplot(prop.table(table(ed_data$NOCPRMG_non, ed_data$OCEDRLP_non)), color=TRUE,main="Overall NOCPRMG vs OCEDRLP Proportions")
+
+```
+
+The field with the most people closely related to their major group is Science engineer related field with 23.2%, followed by Non-Science Engineer-Related people with 21.3%. The most people who are in a job of a not related field is in Non-Science engineering related jobs (66%). However, out of all the people who are in Non-Science and engineering related fields, 26% are not satisfied and 43% are satisfied. 
+
+
+```{r}
+library(gridExtra) 
+
+ed_data <- ed_data %>% mutate(JOBPENS = ifelse(JOBPENS ==1, "Yes", "No"))
+ed_data <- ed_data %>% mutate(JOBVAC = ifelse(JOBVAC ==1, "Yes", "No"))
+
+
+pens.prop <- prop.table(table(ed_data$JOBINS, ed_data$JOBPENS))
+vac.prop <- prop.table(table(ed_data$JOBINS, ed_data$JOBVAC))
+proft.prop <- prop.table(table(ed_data$JOBINS, ed_data$JOBPROFT))
+
+pens.prop
+vac.prop
+proft.prop
+
+m1<- mosaicplot(pens.prop, color=TRUE,main="Insurance vs Pension Plan")
+m2 <- mosaicplot(vac.prop, color=TRUE,main="Insurance vs Paid Vacation/Sick/Leave")
+m3 <- mosaicplot(proft.prop, color=TRUE,main="Insurance vs Profit Plan")
+```
+
+72.2% of people who have an insurance plan also have a pension plan. 78.5% of people who have an insurance plan also have paid leave/sick/vacation days. However, only 23.3% of people with insurance plans also have a pension plan. Infact, it appears if someone does not have an insurance plan in their company, then 61% of them have a pension plan.
+
+```{r}
+ed_data <- ed_data %>% mutate(WAPRSM = ifelse(WAPRSM ==1, "Research and Development",
+                                    ifelse(WAPRSM == 2, "Teaching",
+                                    ifelse(WAPRSM == 3,"Management and Administration", 
+                                    ifelse(NOCPRMG ==4, "Computer Applications", "Other")))))
+
+
+
+```
+
+
+```{r}
+pens1.prop <- prop.table(table(ed_data$JOBSATIS, ed_data$JOBPENS))
+vac1.prop <- prop.table(table(ed_data$JOBSATIS, ed_data$JOBVAC))
+proft1.prop <- prop.table(table(ed_data$JOBSATIS, ed_data$JOBPROFT))
+ins1.prop <- prop.table(table(ed_data$JOBSATIS, ed_data$JOBINS))
+
+pens1.prop
+vac1.prop
+proft1.prop
+ins1.prop
+
+
+mosaicplot(pens.prop, color=TRUE,main="Satisfaction vs Pension Plan")
+mosaicplot(vac.prop, color=TRUE,main="Satisfaction vs Paid Vacation/Sick/Leave")
+mosaicplot(proft.prop, color=TRUE,main="Satisfaction vs Profit Sharing Plan")
+mosaicplot(proft.prop, color=TRUE,main="Satisfaction vs Insurance Plan")
+
+
+```
+
+If the job has a pension plan 68% of people are either very satisfied or somewhat satisfied. 74% percent of people are either very satisfied or somewhat satisfied if the job has paid vacation/sick/leave days. It is interesting to see that 67% of people seem to still be somewhat satisfied or very satisfied even if the job does not have a profit sharing plan. 76% of people who have an insurance plan are either very satisfied or somewhat satisfied.
+
+
+```{r}
+library(plyr)
+ed_data <- ed_data %>% mutate(JOBSATIS_cat = ifelse(JOBSATIS ==1, "Very Satisfied",
+                                            ifelse(JOBSATIS ==2, "Somewhat Satisfied",
+                                            ifelse(JOBSATIS ==3, "Somewhat Disatisfied","Very Disatisfied"))))
+
+
+s_meds <- ddply(ed_data, .(JOBSATIS), summarise, med = median(SALARY))
+
+ggplot(ed_data, aes(x=as.factor(JOBSATIS), y=SALARY)) + geom_boxplot() + xlab("Job Satisfaction") + ylab("Salary") +  geom_text(data = s_meds, aes(x = JOBSATIS, y = med, label = med), size = 3, vjust = -1.5)
+
+```
+
+As the median salary decreases, job satisfaction decreases as well. 
+
+The majority of our sample are satisfied with their jobs. 
+```{r, EDA from AGE}
+ed_data %>%
+  count(JOBSATIS)
+ggplot(data = ed_data) + 
+  geom_bar(mapping = aes(x = JOBSATIS))
+```
+There is a wide range of age group from mid-20s to late-70s. People who are very satisfied have slightly older age range. 
+```{r}
+#Age
+favstats(~AGE, data=ed_data)
+ggplot(data=ed_data) + 
+  geom_histogram(mapping = aes(x=AGE))
+favstats(AGE~JOBSATIS, data=ed_data)
+ggplot(data = ed_data) + 
+  geom_boxplot(mapping = aes(x = as.factor(JOBSATIS), y=AGE))
+```
+A higher proportion of male are very satisfied with their jobs compared to female; while a higher proportion of female are very dissatisfied with their jobs compared to male. 
+```{r}
+#Gender
+prop.table(table(ed_data$GENDER))
+prop.table(table(ed_data$GENDER, ed_data$JOBSATIS),1)
+prop.table(table(ed_data$GENDER, ed_data$JOBSATIS),2)
+
+gender.prop <- prop.table(table(ed_data$JOBSATIS, ed_data$GENDER))
+mosaicplot(gender.prop, color=TRUE,main="Job satisfaction by gender")
+```
+The majority of our sample is White, and a higher proportion of White people are very satisfied with their jobs compared to Asian and under-represented minorities. a higher proportion of under-represented minorities are very dissatisfied with their jobs compared to White and Asian people. 
+```{r}
+#Race
+prop.table(table(ed_data$RACETH))
+prop.table(table(ed_data$RACETH, ed_data$JOBSATIS),1)
+prop.table(table(ed_data$RACETH, ed_data$JOBSATIS),2)
+race.prop <- prop.table(table(ed_data$JOBSATIS, ed_data$RACETH))
+mosaicplot(race.prop, color=TRUE,main="Job satisfaction by race")
+```
+A high percentage of those who had a Professional degree (54.7%) were very satisfied with their job compared to people who had other degrees (40-47%). 
+```{r}
+#Highest degree
+prop.table(table(ed_data$DGRDG))
+prop.table(table(ed_data$DGRDG, ed_data$JOBSATIS),1)
+prop.table(table(ed_data$DGRDG, ed_data$JOBSATIS),2)
+degree.prop <- prop.table(table(ed_data$JOBSATIS, ed_data$DGRDG))
+mosaicplot(degree.prop, color=TRUE,main="Job satisfaction by highest degree")
+```
+The majority works more than 36 hours per week, and the proportion of those who work more than 40 hours/week that are very dissatisfied with their jobs is smaller compared to those who work less than 40 hours/week. 
+```{r}
+#Hours/week worked
+prop.table(table(ed_data$HRSWKGR))
+prop.table(table(ed_data$HRSWKGR, ed_data$JOBSATIS),1)
+prop.table(table(ed_data$HRSWKGR, ed_data$JOBSATIS),2)
+hour.prop <- prop.table(table(ed_data$JOBSATIS, ed_data$HRSWKGR))
+mosaicplot(hour.prop, color=TRUE,main="Job satisfaction by hours per week worked")
+```
+

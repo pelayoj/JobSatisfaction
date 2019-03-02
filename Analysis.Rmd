@@ -1,0 +1,187 @@
+---
+title: "Analysis"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+```{r, echo=FALSE, include = FALSE}
+library(MASS)
+library(tidyverse)
+library(mosaic)
+library(readr)
+library(ipumsr)
+library(labelled)
+library(dplyr)
+library(ggplot2)
+library(generalhoslem)
+
+
+highered_00006 <- read_csv("/home/pelayo1/Stat_316_Project/highered_00006.csv")
+usa_ddi <- read_ipums_ddi("/home/pelayo1/Stat_316_Project/highered_00006.xml")
+ed_data <- read_ipums_micro(usa_ddi, verbose = FALSE)
+
+ed_data <- ed_data %>% 
+  filter(LFSTAT==1, JOBSATIS != 98) %>%
+  mutate(GENDER = droplevels(as_factor(GENDER)), 
+         RACETH= droplevels(as_factor(RACETH)), 
+         DGRDG= droplevels(as_factor(DGRDG)), 
+         LFSTAT= droplevels(as_factor(LFSTAT)), 
+         HRSWKGR = droplevels(as_factor(HRSWKGR)), 
+         JOBINS = droplevels(as_factor(JOBINS)),
+         JOBPENS=droplevels.factor(JOBPENS),
+         JOBPROFT=droplevels(as_factor(JOBPROFT),
+        JOBVAC = droplevels(as_factor(JOBVAC)),
+        OCEDRLP = droplevels(as_factor(OCEDRLP)), 
+        NOCPRMG = droplevels(as_factor(NOCPRMG)),
+        WAPRSM= droplevels(as_factor(WAPRSM)),
+        SALARY = droplevels(as_factor(SALARY)), 
+        JOBSATIS = droplevels(as_factor(JOBSATIS))))
+ed_data <- ed_data %>% mutate(OCEDRLP = ifelse(OCEDRLP == 1,"Closely Related",
+                                    ifelse(OCEDRLP == 2, "Somewhat Related",
+                                    ifelse(OCEDRLP == 3, "Not Related",
+                                    ifelse(OCEDRLP == 98, "Logical Skip", NA)))))
+ed_data <- ed_data %>% mutate(NOCPRMG = ifelse(NOCPRMG == 1,"Computer and mathematical scientists ",
+                                    ifelse(NOCPRMG == 2, "Biological, agricultural and other life scientists",
+                                    ifelse(NOCPRMG == 3, "Physical and related scientists",
+                                    ifelse(NOCPRMG == 4, "Social and related scientists",
+                                    ifelse(NOCPRMG == 5, "Engineers",
+                                    ifelse(NOCPRMG == 6, "Science and engineering related occupations ",
+                                    ifelse(NOCPRMG == 7, "Non-science and engineering occupations ",
+                                    ifelse(NOCPRMG == 98, "Logical Skip", NA)))))))))
+
+ed_data <- ed_data %>% mutate(WAPRSM = ifelse(WAPRSM ==1, "Research and Development",
+                                    ifelse(WAPRSM == 2, "Teaching",
+                                    ifelse(WAPRSM == 3,"Management and Administration", 
+                                    ifelse(NOCPRMG ==4, "Computer Applications", "Other")))))
+ed_data <- ed_data %>%
+  mutate(AGE23 = AGE - 23)
+
+ed_data$Age10 <- ed_data$AGE23/10
+
+```
+
+#Looking at work related factors
+Intercept: closely related, Biological, agricultural and other life scientists, management and administration
+All of these variables have significant p-values. 
+-> we include all work-related factors explanatory variables of interest
+
+Model 1
+```{r}
+wr1<- polr(as.factor(JOBSATIS) ~ OCEDRLP + NOCPRMG + WAPRSM, data = ed_data, Hess=TRUE)
+(wr1_ctable <- coef(summary(wr1)))
+wr1_p <- pnorm(abs(wr1_ctable[, "t value"]), lower.tail = FALSE) * 2
+(wr1_ctable <- cbind(wr1_ctable, "p value" = wr1_p))
+
+```
+
+#Looking at the Available Benefits
+SALARY gives the model error so we have to scale it
+
+jb1 includes all job benefits + salary in the model -> we see that all variables significant
+
+Now we look at interactions: potential interactions from EDA include insurance: pension plan and insurance:paid vacation/sick leave. 
+jb2 includes all job benefits in model + 2 interactions mentioned above -> both interactions are not significant
+
+Is jb2 (with interaction insurance:vacation) is significantly better than jb1? No, based on LRT test
+
+Model 2a
+```{r}
+jb1 <- polr(as.factor(JOBSATIS) ~ scale(SALARY) +JOBVAC + JOBINS + JOBPENS + JOBPROFT, data = ed_data, Hess=TRUE)
+(ctable1 <- coef(summary(jb1)))
+p1 <- pnorm(abs(ctable1[, "t value"]), lower.tail = FALSE) * 2
+(ctable1 <- cbind(ctable1, "p value" = p1))
+```
+
+Model 2b
+```{r}
+jb2 <- polr(as.factor(JOBSATIS) ~ scale(SALARY) + JOBVAC+ JOBINS + JOBPENS + JOBPROFT + JOBINS:JOBPENS +JOBINS:JOBVAC, data = ed_data, Hess=TRUE)
+(ctable2 <- coef(summary(jb2)))
+p2 <- pnorm(abs(ctable2[, "t value"]), lower.tail = FALSE) * 2
+(ctable2 <- cbind(ctable2, "p value" = p2))
+
+anova(jb1, jb2)
+#####
+```
+
+Model 2c
+```{r}
+jb3 <- polr(as.factor(JOBSATIS) ~ scale(SALARY)+JOBVAC+ JOBINS + JOBPENS + JOBPROFT + scale(SALARY):JOBVAC +scale(SALARY):JOBINS, data = ed_data, Hess=TRUE)
+summary(jb3)
+anova(jb1, jb3)
+
+```
+
+#Looking at the Demographic factors
+dmf1 includes all demographic factors -> all significant
+
+Model 3
+```{r}
+dmf1 <- polr(as.factor(JOBSATIS) ~ Age10 + GENDER +RACETH, data = ed_data, Hess=TRUE)
+exp(-0.8476)/(1 +exp(-0.8476)) #Probability of very satisfied for white
+
+(ctable.dmf1 <- coef(summary(jb1)))
+p.dmf1 <- pnorm(abs(ctable.dmf1[, "t value"]), lower.tail = FALSE) * 2
+(ctable.dmf1 <- cbind(ctable.dmf1, "p value" = p.dmf1))
+```
+
+#Combine 3 groups of factors
+final1 combine the 3 small models above (basically all variables we looked at) -> all significant. One problem is that the model is huge
+
+One idea for reducing the model: we can look at effect size. Although signifcant, effect size of pension plan, gender and age is small. 
+
+final2 excludes pension plan, gender and age. However, both AIC and LRT favors final1
+
+Model 4a
+```{r}
+final1 <- polr(as.factor(JOBSATIS) ~ OCEDRLP + NOCPRMG + WAPRSM + scale(SALARY) +JOBVAC + JOBINS + JOBPENS + JOBPROFT + Age10 + GENDER +RACETH, data = ed_data, Hess=TRUE)
+exp(-coef(final1))
+AIC(final1)
+BIC(final1)
+(ctable.final1 <- coef(summary(final1)))
+p.final1 <- pnorm(abs(ctable.final1[, "t value"]), lower.tail = FALSE) * 2
+(ctable.final1 <- cbind(ctable.final1, "p value" = p.final1))
+
+#confint(final1)
+
+```
+
+Model 4b
+```{r}
+final2 <- polr(as.factor(JOBSATIS) ~ OCEDRLP + NOCPRMG + WAPRSM + scale(SALARY) +JOBVAC + JOBINS + JOBPROFT +RACETH, data = ed_data, Hess=TRUE)
+AIC(final2)
+BIC(final2)
+(ctable.final2 <- coef(summary(final2)))
+p.final2 <- pnorm(abs(ctable.final2[, "t value"]), lower.tail = FALSE) * 2
+(ctable.final2 <- cbind(ctable.final1, "p value" = p.final2))
+
+anova(final1, final2)
+
+```
+
+Model 4c
+```{r}
+final3 <- polr(as.factor(JOBSATIS) ~ OCEDRLP + NOCPRMG + WAPRSM + scale(SALARY) +JOBVAC + JOBINS + JOBPENS + JOBPROFT + Age10 + GENDER +RACETH + GENDER:scale(SALARY), data = ed_data, Hess=TRUE)
+summary(final3)
+```
+
+
+Model 4d
+```{r}
+final4 <- polr(as.factor(JOBSATIS) ~ OCEDRLP + NOCPRMG + WAPRSM + scale(SALARY) +JOBVAC + JOBINS + JOBPENS + JOBPROFT + Age10 + GENDER +RACETH + GENDER:scale(SALARY), data = ed_data, Hess=TRUE)
+summary(final4)
+```
+
+Model 4e
+```{r}
+final5 <- polr(as.factor(JOBSATIS) ~ OCEDRLP + NOCPRMG + WAPRSM + scale(SALARY) +JOBVAC + JOBINS + JOBPENS + JOBPROFT + Age10 + GENDER +RACETH, data = ed_data, Hess=TRUE)
+summary(final5)
+```
+
+Model 4f
+```{r}
+ed_data_salary <- ed_data[ed_data$SALARY!=0,]
+final6 <- polr(as.factor(JOBSATIS) ~ OCEDRLP + NOCPRMG + WAPRSM + scale(SALARY) +JOBVAC + JOBINS + JOBPENS + JOBPROFT + Age10 + GENDER +RACETH, data = ed_data_salary, Hess=TRUE)
+summary(final6)
+```
